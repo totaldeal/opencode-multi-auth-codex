@@ -11,6 +11,7 @@ export interface ForceState {
 const FORCE_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
 const ROTATION_STRATEGIES = new Set([
   'round-robin',
+  'sticky',
   'least-used',
   'random',
   'weighted-round-robin'

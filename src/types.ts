@@ -123,10 +123,19 @@ export interface AccountStore {
   forcedUntil?: number | null
   previousRotationStrategy?: string | null
   forcedBy?: string | null
-  rotationStrategy?: 'round-robin' | 'least-used' | 'random' | 'weighted-round-robin'
+  rotationStrategy?: 'round-robin' | 'sticky' | 'least-used' | 'random' | 'weighted-round-robin'
   // Phase F: Settings
   settings?: RotationSettings
+  // Session stickiness: conversation/session key -> alias
+  sessionMappings?: Record<string, SessionMapping>
 }
+
+export interface SessionMapping {
+  alias: string
+  createdAt: number
+}
+
+export const SESSION_MAPPING_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
 // OpenAI model info
 export interface OpenAIModel {
@@ -138,7 +147,7 @@ export interface OpenAIModel {
 
 // Plugin config
 export interface PluginConfig {
-  rotationStrategy: 'round-robin' | 'least-used' | 'random' | 'weighted-round-robin'
+  rotationStrategy: 'round-robin' | 'sticky' | 'least-used' | 'random' | 'weighted-round-robin'
   autoRefreshTokens: boolean
   rateLimitCooldownMs: number // How long to skip rate-limited accounts
   modelUnsupportedCooldownMs: number // How long to skip accounts that don't support the requested model
@@ -179,7 +188,7 @@ export const DEFAULT_CONFIG: PluginConfig = {
 // Phase F: Settings model for weighted rotation and thresholds
 export interface RotationSettings {
   // Rotation strategy
-  rotationStrategy: 'round-robin' | 'least-used' | 'random' | 'weighted-round-robin'
+  rotationStrategy: 'round-robin' | 'sticky' | 'least-used' | 'random' | 'weighted-round-robin'
   
   // Rate limit thresholds (0-100)
   criticalThreshold: number // Account skipped below this (default: 10)

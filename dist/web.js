@@ -867,6 +867,7 @@ const HTML = `<!doctype html>
               <label for="rotationStrategySelect">Strategy</label>
               <select id="rotationStrategySelect" title="">
                 <option value="round-robin" title="Cycle through enabled accounts in order.">round-robin</option>
+                <option value="sticky" title="Keep the last successful account active until it errors, then move to the next healthy account.">sticky</option>
                 <option value="least-used" title="Prefer the enabled account with the lowest usage count.">least-used</option>
                 <option value="random" title="Randomly pick from healthy accounts each request.">random</option>
                 <option value="weighted-round-robin" title="Split requests by your account weights (example: 0.70/0.20/0.10 sends about 70%/20%/10%). Limited or disabled accounts are skipped automatically.">weighted-round-robin</option>
@@ -1011,6 +1012,7 @@ const HTML = `<!doctype html>
       let createAccountTrackedEmail = ''
       const rotationStrategyHelp = {
         'round-robin': 'Cycle through enabled accounts in order.',
+        'sticky': 'Keep the last successful account active until it errors, then move to the next healthy account.',
         'least-used': 'Prefer the enabled account with the lowest usage count.',
         'random': 'Randomly pick from healthy accounts each request.',
         'weighted-round-robin': 'Split requests by your account weights (example: 0.70/0.20/0.10 sends about 70%/20%/10%). Limited or disabled accounts are skipped automatically.'

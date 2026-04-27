@@ -141,4 +141,81 @@ describe('Rotation Strategy Runtime Behavior', () => {
 
     expect(rotation).toBeNull()
   })
+
+  it('sticky strategy pins to activeAlias while healthy', async () => {
+    const store = loadStore()
+    store.accounts.alpha = createAccount('alpha', 0)
+    store.accounts.beta = createAccount('beta', 0)
+    store.activeAlias = 'alpha'
+    saveStore(store)
+
+    const rotation = await getNextAccount({
+      ...DEFAULT_CONFIG,
+      rotationStrategy: 'sticky'
+    })
+
+    expect(rotation?.account.alias).toBe('alpha')
+  })
+
+  it('sticky strategy falls back when activeAlias is blocked', async () => {
+    const store = loadStore()
+    store.accounts.alpha = createAccount('alpha', 0)
+    store.accounts.alpha.rateLimitedUntil = Date.now() + 60_000
+    store.accounts.beta = createAccount('beta', 0)
+    store.activeAlias = 'alpha'
+    saveStore(store)
+
+    const rotation = await getNextAccount({
+      ...DEFAULT_CONFIG,
+      rotationStrategy: 'sticky'
+    })
+
+    expect(rotation?.account.alias).toBe('beta')
+  })
+
+  it('session stickiness returns mapped alias for sessionKey', async () => {
+    const store = loadStore()
+    store.accounts.alpha = createAccount('alpha', 0)
+    store.accounts.beta = createAccount('beta', 0)
+    saveStore(store)
+
+    // First request establishes mapping
+    const first = await getNextAccount(
+      { ...DEFAULT_CONFIG, rotationStrategy: 'round-robin' },
+      { sessionKey: 'sess-123' }
+    )
+    expect(first?.account.alias).toBeDefined()
+
+    // Second request with same sessionKey should return same alias
+    const second = await getNextAccount(
+      { ...DEFAULT_CONFIG, rotationStrategy: 'round-robin' },
+      { sessionKey: 'sess-123' }
+    )
+    expect(second?.account.alias).toBe(first?.account.alias)
+  })
+
+  it('session stickiness clears mapping when mapped alias is blocked', async () => {
+    const store = loadStore()
+    store.accounts.alpha = createAccount('alpha', 0)
+    store.accounts.beta = createAccount('beta', 0)
+    saveStore(store)
+
+    // Establish mapping to alpha
+    const first = await getNextAccount(
+      { ...DEFAULT_CONFIG, rotationStrategy: 'round-robin' },
+      { sessionKey: 'sess-456' }
+    )
+    expect(first?.account.alias).toBe('alpha')
+
+    // Block alpha
+    store.accounts.alpha.rateLimitedUntil = Date.now() + 60_000
+    saveStore(store)
+
+    // Next request should fall back to beta
+    const second = await getNextAccount(
+      { ...DEFAULT_CONFIG, rotationStrategy: 'round-robin' },
+      { sessionKey: 'sess-456' }
+    )
+    expect(second?.account.alias).toBe('beta')
+  })
 })

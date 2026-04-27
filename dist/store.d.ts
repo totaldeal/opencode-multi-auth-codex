@@ -15,6 +15,10 @@ export declare function updateAccount(alias: string, updates: Partial<AccountCre
 export declare function setActiveAlias(alias: string | null): AccountStore;
 export declare function getActiveAccount(): AccountCredentials | null;
 export declare function listAccounts(): AccountCredentials[];
+export declare function getSessionAlias(sessionKey: string): string | null;
+export declare function setSessionAlias(sessionKey: string, alias: string): void;
+export declare function clearSessionAlias(sessionKey: string): void;
+export declare function cleanupSessionMappings(): void;
 export declare function getStorePath(): string;
 export declare function getStoreStatus(): {
     locked: boolean;

@@ -640,8 +640,10 @@ const MultiAuthPlugin: Plugin = async ({ client, $, serverUrl, project, director
               rotationStrategy: settings.settings.rotationStrategy
             }
 
+            const sessionKey = body?.conversation_id || body?.session_id || body?.prompt_cache_key || undefined
             const rotation = await getNextAccount(effectiveConfig, {
-              model: normalizedModel
+              model: normalizedModel,
+              sessionKey
             })
 
             if (!rotation) {

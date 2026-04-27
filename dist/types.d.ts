@@ -72,9 +72,15 @@ export interface AccountStore {
     forcedUntil?: number | null;
     previousRotationStrategy?: string | null;
     forcedBy?: string | null;
-    rotationStrategy?: 'round-robin' | 'least-used' | 'random' | 'weighted-round-robin';
+    rotationStrategy?: 'round-robin' | 'sticky' | 'least-used' | 'random' | 'weighted-round-robin';
     settings?: RotationSettings;
+    sessionMappings?: Record<string, SessionMapping>;
 }
+export interface SessionMapping {
+    alias: string;
+    createdAt: number;
+}
+export declare const SESSION_MAPPING_TTL_MS: number;
 export interface OpenAIModel {
     id: string;
     object: string;
@@ -82,7 +88,7 @@ export interface OpenAIModel {
     owned_by: string;
 }
 export interface PluginConfig {
-    rotationStrategy: 'round-robin' | 'least-used' | 'random' | 'weighted-round-robin';
+    rotationStrategy: 'round-robin' | 'sticky' | 'least-used' | 'random' | 'weighted-round-robin';
     autoRefreshTokens: boolean;
     rateLimitCooldownMs: number;
     modelUnsupportedCooldownMs: number;
@@ -110,7 +116,7 @@ export interface ProviderModel {
 }
 export declare const DEFAULT_CONFIG: PluginConfig;
 export interface RotationSettings {
-    rotationStrategy: 'round-robin' | 'least-used' | 'random' | 'weighted-round-robin';
+    rotationStrategy: 'round-robin' | 'sticky' | 'least-used' | 'random' | 'weighted-round-robin';
     criticalThreshold: number;
     lowThreshold: number;
     accountWeights: Record<string, number>;

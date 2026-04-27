@@ -9,6 +9,7 @@ import type {
   RateLimitHistoryEntry,
   RateLimitSnapshot
 } from './types.js'
+import { SESSION_MAPPING_TTL_MS } from './types.js'
 
 const STORE_DIR_ENV = 'OPENCODE_MULTI_AUTH_STORE_DIR'
 const STORE_FILE_ENV = 'OPENCODE_MULTI_AUTH_STORE_FILE'
@@ -48,9 +49,9 @@ type StoreFileV1 = {
 
 type StoreFileV2 = StoreFileV1 & {
   version: 2
-  settings?: {
-    rotationStrategy?: 'round-robin' | 'least-used' | 'random' | 'weighted-round-robin'
-  }
+    settings?: {
+      rotationStrategy?: 'round-robin' | 'sticky' | 'least-used' | 'random' | 'weighted-round-robin'
+    }
   force?: {
     forcedAlias: string | null
     forcedUntil: number | null
@@ -217,8 +218,21 @@ function validateStore(data: any): AccountStore | null {
     forcedBy: data.forcedBy ?? null,
     // Phase F: Preserve rotation strategy and settings
     rotationStrategy: data.rotationStrategy ?? 'round-robin',
-    settings: data.settings ?? undefined
+    settings: data.settings ?? undefined,
+    // Session stickiness mappings
+    sessionMappings: validateSessionMappings(data.sessionMappings)
   }
+}
+
+function validateSessionMappings(data: unknown): Record<string, import('./types.js').SessionMapping> | undefined {
+  if (!data || typeof data !== 'object') return undefined
+  const result: Record<string, import('./types.js').SessionMapping> = {}
+  for (const [key, value] of Object.entries(data)) {
+    if (value && typeof value === 'object' && typeof (value as any).alias === 'string' && typeof (value as any).createdAt === 'number') {
+      result[key] = { alias: (value as any).alias, createdAt: (value as any).createdAt }
+    }
+  }
+  return Object.keys(result).length > 0 ? result : undefined
 }
 
 function migrateV1toV2(data: StoreFileV1): StoreFileV2 {
@@ -615,6 +629,54 @@ export function getActiveAccount(): AccountCredentials | null {
 export function listAccounts(): AccountCredentials[] {
   const store = loadStore()
   return Object.values(store.accounts)
+}
+
+export function getSessionAlias(sessionKey: string): string | null {
+  const store = loadStore()
+  const mapping = store.sessionMappings?.[sessionKey]
+  if (!mapping) return null
+  const now = Date.now()
+  if (now - mapping.createdAt > SESSION_MAPPING_TTL_MS) {
+    // Expired
+    const next = { ...store }
+    if (next.sessionMappings) {
+      delete next.sessionMappings[sessionKey]
+    }
+    saveStore(next)
+    return null
+  }
+  return mapping.alias
+}
+
+export function setSessionAlias(sessionKey: string, alias: string): void {
+  const store = loadStore()
+  store.sessionMappings = {
+    ...(store.sessionMappings || {}),
+    [sessionKey]: { alias, createdAt: Date.now() }
+  }
+  saveStore(store)
+}
+
+export function clearSessionAlias(sessionKey: string): void {
+  const store = loadStore()
+  if (store.sessionMappings && store.sessionMappings[sessionKey]) {
+    delete store.sessionMappings[sessionKey]
+    saveStore(store)
+  }
+}
+
+export function cleanupSessionMappings(): void {
+  const store = loadStore()
+  if (!store.sessionMappings) return
+  const now = Date.now()
+  let changed = false
+  for (const [key, mapping] of Object.entries(store.sessionMappings)) {
+    if (now - mapping.createdAt > SESSION_MAPPING_TTL_MS) {
+      delete store.sessionMappings[key]
+      changed = true
+    }
+  }
+  if (changed) saveStore(store)
 }
 
 export function getStorePath(): string {

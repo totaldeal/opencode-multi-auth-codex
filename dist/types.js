@@ -26,6 +26,7 @@ export function calculateLimitsConfidence(lastProbeAt, lastErrorAt, limitStatus)
         return 'unknown';
     }
 }
+export const SESSION_MAPPING_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 export const DEFAULT_CONFIG = {
     rotationStrategy: 'round-robin',
     autoRefreshTokens: true,

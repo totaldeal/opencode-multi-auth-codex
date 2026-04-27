@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'node:crypto';
 import { hasMeaningfulRateLimits } from './rate-limits.js';
+import { SESSION_MAPPING_TTL_MS } from './types.js';
 const STORE_DIR_ENV = 'OPENCODE_MULTI_AUTH_STORE_DIR';
 const STORE_FILE_ENV = 'OPENCODE_MULTI_AUTH_STORE_FILE';
 const DEFAULT_STORE_DIR = path.join(os.homedir(), '.config', 'opencode-multi-auth');
@@ -166,8 +167,21 @@ function validateStore(data) {
         forcedBy: data.forcedBy ?? null,
         // Phase F: Preserve rotation strategy and settings
         rotationStrategy: data.rotationStrategy ?? 'round-robin',
-        settings: data.settings ?? undefined
+        settings: data.settings ?? undefined,
+        // Session stickiness mappings
+        sessionMappings: validateSessionMappings(data.sessionMappings)
     };
+}
+function validateSessionMappings(data) {
+    if (!data || typeof data !== 'object')
+        return undefined;
+    const result = {};
+    for (const [key, value] of Object.entries(data)) {
+        if (value && typeof value === 'object' && typeof value.alias === 'string' && typeof value.createdAt === 'number') {
+            result[key] = { alias: value.alias, createdAt: value.createdAt };
+        }
+    }
+    return Object.keys(result).length > 0 ? result : undefined;
 }
 function migrateV1toV2(data) {
     return {
@@ -534,6 +548,53 @@ export function getActiveAccount() {
 export function listAccounts() {
     const store = loadStore();
     return Object.values(store.accounts);
+}
+export function getSessionAlias(sessionKey) {
+    const store = loadStore();
+    const mapping = store.sessionMappings?.[sessionKey];
+    if (!mapping)
+        return null;
+    const now = Date.now();
+    if (now - mapping.createdAt > SESSION_MAPPING_TTL_MS) {
+        // Expired
+        const next = { ...store };
+        if (next.sessionMappings) {
+            delete next.sessionMappings[sessionKey];
+        }
+        saveStore(next);
+        return null;
+    }
+    return mapping.alias;
+}
+export function setSessionAlias(sessionKey, alias) {
+    const store = loadStore();
+    store.sessionMappings = {
+        ...(store.sessionMappings || {}),
+        [sessionKey]: { alias, createdAt: Date.now() }
+    };
+    saveStore(store);
+}
+export function clearSessionAlias(sessionKey) {
+    const store = loadStore();
+    if (store.sessionMappings && store.sessionMappings[sessionKey]) {
+        delete store.sessionMappings[sessionKey];
+        saveStore(store);
+    }
+}
+export function cleanupSessionMappings() {
+    const store = loadStore();
+    if (!store.sessionMappings)
+        return;
+    const now = Date.now();
+    let changed = false;
+    for (const [key, mapping] of Object.entries(store.sessionMappings)) {
+        if (now - mapping.createdAt > SESSION_MAPPING_TTL_MS) {
+            delete store.sessionMappings[key];
+            changed = true;
+        }
+    }
+    if (changed)
+        saveStore(store);
 }
 export function getStorePath() {
     return getStoreFile();

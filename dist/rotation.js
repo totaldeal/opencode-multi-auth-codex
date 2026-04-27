@@ -1,4 +1,4 @@
-import { getStoreDiagnostics, loadStore, saveStore, updateAccount } from './store.js';
+import { getStoreDiagnostics, loadStore, saveStore, updateAccount, getSessionAlias, setSessionAlias, clearSessionAlias } from './store.js';
 import { ensureValidToken } from './auth.js';
 import { decodeJwtPayload, getPlanTypeFromClaims } from './codex-auth.js';
 import { isForceActive, checkAndAutoClearForce, getForceState, clearForce } from './force-mode.js';
@@ -155,6 +155,45 @@ export async function getNextAccount(config, selection) {
             clearForce();
         }
     }
+    // Session stickiness: if a session key maps to a healthy alias, use it directly.
+    const sessionKey = selection?.sessionKey;
+    if (sessionKey) {
+        const mappedAlias = getSessionAlias(sessionKey);
+        if (mappedAlias && store.accounts[mappedAlias]) {
+            const health = evaluateAccountHealth(store.accounts[mappedAlias], now);
+            if (health.isHealthy) {
+                const token = await ensureValidToken(mappedAlias);
+                if (token) {
+                    store = updateAccount(mappedAlias, {
+                        usageCount: (store.accounts[mappedAlias].usageCount || 0) + 1,
+                        lastUsed: now,
+                        limitError: undefined
+                    });
+                    store.activeAlias = mappedAlias;
+                    store.lastRotation = now;
+                    saveStore(store);
+                    return {
+                        account: store.accounts[mappedAlias],
+                        token,
+                        forceState: {
+                            active: isForceActive(),
+                            alias: getForceState().forcedAlias,
+                            remainingMs: (() => {
+                                const fu = getForceState().forcedUntil;
+                                return fu ? fu - now : 0;
+                            })()
+                        }
+                    };
+                }
+                // Token failed: clear mapping and fall through to normal selection.
+                clearSessionAlias(sessionKey);
+            }
+            else {
+                // Mapped alias no longer healthy: clear mapping.
+                clearSessionAlias(sessionKey);
+            }
+        }
+    }
     const healthMap = new Map();
     for (const alias of aliases) {
         const acc = store.accounts[alias];
@@ -244,6 +283,26 @@ export async function getNextAccount(config, selection) {
                 }
                 return { aliases: [selected] };
             }
+            case 'sticky': {
+                const sorted = [...candidateAliases].sort((a, b) => {
+                    const healthA = healthMap.get(a);
+                    const healthB = healthMap.get(b);
+                    return (healthB?.priority || 0) - (healthA?.priority || 0);
+                });
+                // Pin to activeAlias if it is healthy; otherwise fall through like round-robin.
+                const pinned = store.activeAlias && sorted.includes(store.activeAlias)
+                    ? [store.activeAlias, ...sorted.filter(a => a !== store.activeAlias)]
+                    : sorted;
+                const start = store.rotationIndex % pinned.length;
+                const rr = pinned.map((_, i) => pinned[(start + i) % pinned.length]);
+                const nextIndex = (selected) => {
+                    const idx = pinned.indexOf(selected);
+                    if (idx < 0)
+                        return store.rotationIndex;
+                    return (idx + 1) % pinned.length;
+                };
+                return { aliases: rr, nextIndex };
+            }
             case 'round-robin':
             default: {
                 const sorted = [...candidateAliases].sort((a, b) => {
@@ -289,6 +348,9 @@ export async function getNextAccount(config, selection) {
             store.rotationIndex = nextIndex(candidate);
         }
         saveStore(store);
+        if (sessionKey) {
+            setSessionAlias(sessionKey, candidate);
+        }
         const currentForceState = getForceState();
         return {
             account: store.accounts[candidate],

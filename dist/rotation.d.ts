@@ -10,6 +10,7 @@ export interface RotationResult {
 }
 export interface AccountSelectionContext {
     model?: string;
+    sessionKey?: string;
 }
 export declare function getNextAccount(config: typeof DEFAULT_CONFIG, selection?: AccountSelectionContext): Promise<RotationResult | null>;
 export declare function markRateLimited(alias: string, rateLimitedUntil: number): void;
