@@ -673,7 +673,14 @@ const MultiAuthPlugin: Plugin = async ({ client, $, serverUrl, project, director
 
             const { account, token } = rotation
             
+            if (process.env.OPENCODE_MULTI_AUTH_DEBUG === '1') {
+              console.log(`[multi-auth] Using account: ${account.alias} (attempt ${attempt}/${maxAttempts}, strategy: ${effectiveConfig.rotationStrategy}${sessionKey ? ', session: ' + sessionKey : ''})`)
+            }
+            
             if (triedAliases.has(account.alias)) {
+              if (process.env.OPENCODE_MULTI_AUTH_DEBUG === '1') {
+                console.log(`[multi-auth] Already tried ${account.alias}, skipping`)
+              }
               continue
             }
             triedAliases.add(account.alias)
@@ -793,6 +800,10 @@ const MultiAuthPlugin: Plugin = async ({ client, $, serverUrl, project, director
                   markAuthInvalid(account.alias)
                 }
 
+                if (process.env.OPENCODE_MULTI_AUTH_DEBUG === '1') {
+                  console.log(`[multi-auth] Account ${account.alias} got ${res.status}, failing over (attempt ${attempt}/${maxAttempts})`)
+                }
+
                 if (attempt < maxAttempts) {
                   continue
                 }
@@ -815,6 +826,10 @@ const MultiAuthPlugin: Plugin = async ({ client, $, serverUrl, project, director
                   pluginConfig.rateLimitCooldownMs
                 )
                 markRateLimited(account.alias, rateLimitedUntil)
+
+                if (process.env.OPENCODE_MULTI_AUTH_DEBUG === '1') {
+                  console.log(`[multi-auth] Account ${account.alias} rate limited (429), failing over (attempt ${attempt}/${maxAttempts})`)
+                }
 
                 if (attempt < maxAttempts) {
                   continue
@@ -854,6 +869,10 @@ const MultiAuthPlugin: Plugin = async ({ client, $, serverUrl, project, director
                     error: message || code
                   })
 
+                  if (process.env.OPENCODE_MULTI_AUTH_DEBUG === '1') {
+                    console.log(`[multi-auth] Account ${account.alias} workspace deactivated (402), failing over (attempt ${attempt}/${maxAttempts})`)
+                  }
+
                   if (attempt < maxAttempts) {
                     continue
                   }
@@ -885,6 +904,10 @@ const MultiAuthPlugin: Plugin = async ({ client, $, serverUrl, project, director
                     model: normalizedModel,
                     error: message
                   })
+
+                  if (process.env.OPENCODE_MULTI_AUTH_DEBUG === '1') {
+                    console.log(`[multi-auth] Account ${account.alias} model unsupported (400), failing over (attempt ${attempt}/${maxAttempts})`)
+                  }
 
                   if (attempt < maxAttempts) {
                     continue

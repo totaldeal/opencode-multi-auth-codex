@@ -289,19 +289,12 @@ export async function getNextAccount(config, selection) {
                     const healthB = healthMap.get(b);
                     return (healthB?.priority || 0) - (healthA?.priority || 0);
                 });
-                // Pin to activeAlias if it is healthy; otherwise fall through like round-robin.
+                // Pin activeAlias to the front regardless of rotationIndex.
+                // Do NOT use rotationIndex here — sticky must always prefer activeAlias first.
                 const pinned = store.activeAlias && sorted.includes(store.activeAlias)
                     ? [store.activeAlias, ...sorted.filter(a => a !== store.activeAlias)]
                     : sorted;
-                const start = store.rotationIndex % pinned.length;
-                const rr = pinned.map((_, i) => pinned[(start + i) % pinned.length]);
-                const nextIndex = (selected) => {
-                    const idx = pinned.indexOf(selected);
-                    if (idx < 0)
-                        return store.rotationIndex;
-                    return (idx + 1) % pinned.length;
-                };
-                return { aliases: rr, nextIndex };
+                return { aliases: pinned };
             }
             case 'round-robin':
             default: {
@@ -348,6 +341,9 @@ export async function getNextAccount(config, selection) {
             store.rotationIndex = nextIndex(candidate);
         }
         saveStore(store);
+        if (rotationStrategy === 'sticky' && process.env.OPENCODE_MULTI_AUTH_DEBUG === '1') {
+            console.log(`[multi-auth] sticky: selected ${candidate}${sessionKey ? ' for session ' + sessionKey : ''}`);
+        }
         if (sessionKey) {
             setSessionAlias(sessionKey, candidate);
         }
