@@ -4,6 +4,7 @@ import { loginAccount } from './auth.js';
 import { removeAccount, listAccounts, getStorePath, loadStore } from './store.js';
 import { startWebConsole } from './web.js';
 import { disableService, installService, serviceStatus } from './systemd.js';
+import { updateSettings, getSettings } from './settings.js';
 const args = process.argv.slice(2);
 const command = args[0];
 const alias = args[1];
@@ -62,8 +63,9 @@ async function main() {
         case 'status': {
             const store = loadStore();
             const accounts = Object.values(store.accounts);
+            const settings = getSettings();
             console.log('\n[multi-auth] Account Status\n');
-            console.log('Strategy: round-robin');
+            console.log(`Strategy: ${settings.settings.rotationStrategy}`);
             console.log(`Accounts: ${accounts.length}`);
             console.log(`Active: ${store.activeAlias || 'none'}\n`);
             if (accounts.length === 0) {
@@ -97,6 +99,61 @@ async function main() {
                 process.exit(1);
             }
             startWebConsole({ port, host: hostArg });
+            break;
+        }
+        case 'settings': {
+            const settingKey = args[1];
+            const settingValue = args[2];
+            if (!settingKey || !settingValue) {
+                const settings = getSettings();
+                console.log('\n[multi-auth] Current Settings\n');
+                console.log(`Rotation strategy: ${settings.settings.rotationStrategy}`);
+                console.log(`Critical threshold: ${settings.settings.criticalThreshold}`);
+                console.log(`Low threshold: ${settings.settings.lowThreshold}`);
+                if (Object.keys(settings.settings.accountWeights).length > 0) {
+                    console.log(`Account weights: ${JSON.stringify(settings.settings.accountWeights)}`);
+                }
+                console.log(`\nUsage: opencode-multi-auth settings <key> <value>`);
+                console.log('Keys: rotation-strategy, critical-threshold, low-threshold');
+                console.log('Values for rotation-strategy: round-robin, sticky, least-used, random, weighted-round-robin');
+                break;
+            }
+            if (settingKey === 'rotation-strategy') {
+                const result = updateSettings({ rotationStrategy: settingValue }, 'cli');
+                if (result.success) {
+                    console.log(`Rotation strategy set to: ${settingValue}`);
+                }
+                else {
+                    console.error(`Failed to set rotation strategy: ${result.errors?.map(e => e.message).join(', ')}`);
+                    process.exit(1);
+                }
+            }
+            else if (settingKey === 'critical-threshold') {
+                const val = Number(settingValue);
+                const result = updateSettings({ criticalThreshold: val }, 'cli');
+                if (result.success) {
+                    console.log(`Critical threshold set to: ${val}`);
+                }
+                else {
+                    console.error(`Failed: ${result.errors?.map(e => e.message).join(', ')}`);
+                    process.exit(1);
+                }
+            }
+            else if (settingKey === 'low-threshold') {
+                const val = Number(settingValue);
+                const result = updateSettings({ lowThreshold: val }, 'cli');
+                if (result.success) {
+                    console.log(`Low threshold set to: ${val}`);
+                }
+                else {
+                    console.error(`Failed: ${result.errors?.map(e => e.message).join(', ')}`);
+                    process.exit(1);
+                }
+            }
+            else {
+                console.error(`Unknown setting: ${settingKey}`);
+                process.exit(1);
+            }
             break;
         }
         case 'service': {
@@ -134,6 +191,7 @@ Commands:
   remove <alias>   Remove an account
   list             List all configured accounts
   status           Show detailed account status
+  settings         View or change settings (rotation-strategy, thresholds)
   path             Show config file location
   web              Launch local Codex auth.json dashboard (use --port/--host)
   service          Install/disable systemd user service (install|disable|status)
@@ -144,6 +202,7 @@ Examples:
   opencode-multi-auth add work
   opencode-multi-auth add backup
   opencode-multi-auth status
+  opencode-multi-auth settings rotation-strategy sticky
   opencode-multi-auth web --port 3434 --host 127.0.0.1
   opencode-multi-auth service install --port 3434 --host 127.0.0.1
 
